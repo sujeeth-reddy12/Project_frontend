@@ -19,18 +19,18 @@ function normalizeAuth(payload) {
 
 export function AuthProvider({ children }) {
   const [auth, setAuth] = useState(() => {
-    const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+    const stored = sessionStorage.getItem(AUTH_STORAGE_KEY);
     return stored ? JSON.parse(stored) : null;
   });
 
   const login = (payload) => {
     const next = normalizeAuth(payload);
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next));
+    sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next));
     setAuth(next);
   };
 
   const logout = () => {
-    localStorage.removeItem(AUTH_STORAGE_KEY);
+    sessionStorage.removeItem(AUTH_STORAGE_KEY);
     setAuth(null);
   };
 
