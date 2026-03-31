@@ -1,16 +1,37 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import axiosClient from '../api/axiosClient';
 import { useAuth } from '../context/AuthContext';
 import ProfileAvatar from '../components/ProfileAvatar';
 
 function statusLabel(status) {
-  if (status === 'SUBMITTED' || status === 'ASSIGNED') {
-    return 'Pending';
-  }
-  if (status === 'IN_PROGRESS') {
-    return 'In Progress';
-  }
+  if (status === 'SUBMITTED' || status === 'ASSIGNED') return 'Pending';
+  if (status === 'IN_PROGRESS') return 'In Progress';
   return 'Resolved';
+}
+
+function statusClass(status) {
+  if (status === 'SUBMITTED' || status === 'ASSIGNED') return 'nbadge nbadge-pending';
+  if (status === 'IN_PROGRESS') return 'nbadge nbadge-progress';
+  return 'nbadge nbadge-resolved';
+}
+
+function eventLabel(event) {
+  if (!event) return event;
+  return event.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function eventClass(event) {
+  if (!event) return 'nbadge';
+  if (event.includes('RESOLVED')) return 'nbadge nbadge-resolved';
+  if (event.includes('IN_PROGRESS') || event.includes('PROGRESS')) return 'nbadge nbadge-progress';
+  if (event.includes('ASSIGNED')) return 'nbadge nbadge-assigned';
+  return 'nbadge nbadge-pending';
+}
+
+function formatTime(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 export default function UserDashboardPage() {
@@ -19,6 +40,7 @@ export default function UserDashboardPage() {
   const [notifications, setNotifications] = useState([]);
   const [error, setError] = useState('');
   const [form, setForm] = useState({ title: '', description: '', category: '' });
+  const [selectedComplaintId, setSelectedComplaintId] = useState('all');
 
   const loadData = async () => {
     try {
@@ -43,16 +65,18 @@ export default function UserDashboardPage() {
     event.preventDefault();
     try {
       setError('');
-      await axiosClient.post('/complaints', {
-        ...form,
-        userId: auth.userId,
-      });
+      await axiosClient.post('/complaints', { ...form, userId: auth.userId });
       setForm({ title: '', description: '', category: '' });
       await loadData();
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'Failed to submit complaint.');
     }
   };
+
+  const filteredNotifications = useMemo(() => {
+    if (selectedComplaintId === 'all') return notifications;
+    return notifications.filter((n) => String(n.complaintId) === String(selectedComplaintId));
+  }, [notifications, selectedComplaintId]);
 
   return (
     <div className="dashboard-page">
@@ -85,21 +109,14 @@ export default function UserDashboardPage() {
             <option value="">Select Category</option>
             <option value="Room Cleanliness">Room Cleanliness</option>
             <option value="Room Maintenance">Room Maintenance</option>
-            <option value="Air Conditioning">Air Conditioning</option>
             <option value="Housekeeping">Housekeeping</option>
             <option value="Front Desk Service">Front Desk Service</option>
             <option value="Check-in / Check-out">Check-in / Check-out</option>
             <option value="Food & Beverage">Food & Beverage</option>
-            <option value="Restaurant Service">Restaurant Service</option>
             <option value="Room Service">Room Service</option>
-            <option value="Swimming Pool">Swimming Pool</option>
-            <option value="Gym & Fitness">Gym & Fitness</option>
-            <option value="Spa & Wellness">Spa & Wellness</option>
             <option value="Noise Complaint">Noise Complaint</option>
             <option value="Wi-Fi & Internet">Wi-Fi & Internet</option>
             <option value="Billing & Charges">Billing & Charges</option>
-            <option value="Parking">Parking</option>
-            <option value="Security">Security</option>
             <option value="Other">Other</option>
           </select>
           <textarea
@@ -133,7 +150,7 @@ export default function UserDashboardPage() {
                   <td>#{item.id}</td>
                   <td>{item.title}</td>
                   <td>{item.category}</td>
-                  <td>{statusLabel(item.status)}</td>
+                  <td><span className={statusClass(item.status)}>{statusLabel(item.status)}</span></td>
                   <td>{item.assignedToName || 'Unassigned'}</td>
                 </tr>
               ))}
@@ -143,14 +160,33 @@ export default function UserDashboardPage() {
       </section>
 
       <section className="card">
-        <h2>Notifications</h2>
-        <ul className="notification-list">
-          {notifications.length === 0 ? (
-            <li>No notifications yet.</li>
-          ) : notifications.map((note) => (
-            <li key={note.id}><strong>{note.event}</strong> - {note.message}</li>
+        <div className="notif-header">
+          <h2>Notifications</h2>
+          <select
+            className="notif-filter"
+            value={selectedComplaintId}
+            onChange={(e) => setSelectedComplaintId(e.target.value)}
+          >
+            <option value="all">All Complaints</option>
+            {complaints.map((c) => (
+              <option key={c.id} value={c.id}>#{c.id} — {c.title}</option>
+            ))}
+          </select>
+        </div>
+        <div className="notif-list">
+          {filteredNotifications.length === 0 ? (
+            <p className="notif-empty">No notifications for this selection.</p>
+          ) : filteredNotifications.map((note) => (
+            <div key={note.id} className="notif-item">
+              <div className="notif-item-top">
+                <span className={eventClass(note.event)}>{eventLabel(note.event)}</span>
+                {note.complaintId && <span className="notif-complaint-tag">Complaint #{note.complaintId}</span>}
+                <span className="notif-time">{formatTime(note.createdAt)}</span>
+              </div>
+              <p className="notif-msg">{note.message}</p>
+            </div>
           ))}
-        </ul>
+        </div>
       </section>
     </div>
   );

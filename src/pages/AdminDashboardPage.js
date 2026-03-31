@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import axiosClient from '../api/axiosClient';
 import { useAuth } from '../context/AuthContext';
-import { Bar, BarChart, CartesianGrid, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import ProfileAvatar from '../components/ProfileAvatar';
+
+const PIE_COLORS = ['#f59e0b', '#3b82f6', '#22c55e'];
 
 export default function AdminDashboardPage() {
   const { auth, logout } = useAuth();
@@ -14,7 +16,7 @@ export default function AdminDashboardPage() {
   const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState('');
 
-  const staffUsers = useMemo(() => users.filter((user) => user.role === 'STAFF'), [users]);
+  const staffUsers = useMemo(() => users.filter((user) => user.role === 'STAFF' && user.available), [users]);
 
   const chartData = useMemo(() => ([
     { name: 'Total', value: summary.total },
@@ -125,44 +127,60 @@ export default function AdminDashboardPage() {
 
       <section className="card">
         <h2>Manage Users and Staff</h2>
-        <form className="form-grid" onSubmit={handleSaveUser}>
-          <input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-          <input type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
-          <input type="password" placeholder="Password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
-          <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-            <option value="USER">User</option>
-            <option value="STAFF">Staff</option>
-            <option value="ADMIN">Admin</option>
-          </select>
-          <button type="submit">{editingId ? 'Update' : 'Add'} User</button>
-        </form>
-
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((user) => (
-                <tr key={user.id}>
-                  <td>#{user.id}</td>
-                  <td>{user.name}</td>
-                  <td>{user.email}</td>
-                  <td>{user.role}</td>
-                  <td>
-                    <button type="button" onClick={() => handleEdit(user)}>Edit</button>
-                    <button type="button" className="danger" onClick={() => handleDelete(user.id)}>Delete</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="manage-users-layout">
+          <div className="manage-users-form card">
+            <h3>{editingId ? 'Edit User' : 'Add New User'}</h3>
+            <form className="form-grid" onSubmit={handleSaveUser}>
+              <input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+              <input type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
+              <input type="password" placeholder="Password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
+              <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+                <option value="USER">User</option>
+                <option value="STAFF">Staff</option>
+              </select>
+              <button type="submit">{editingId ? 'Update User' : 'Add User'}</button>
+              {editingId && (
+                <button type="button" style={{ background: '#888' }} onClick={() => { setEditingId(null); setForm({ name: '', email: '', password: '', role: 'USER' }); }}>Cancel</button>
+              )}
+            </form>
+          </div>
+          <div className="manage-users-table">
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.filter((u) => u.role !== 'ADMIN').map((user) => (
+                    <tr key={user.id}>
+                      <td>#{user.id}</td>
+                      <td>{user.name}</td>
+                      <td>{user.email}</td>
+                      <td>{user.role}</td>
+                      <td>
+                        {user.role === 'STAFF' && (
+                          <span className={`nbadge ${user.available ? 'nbadge-resolved' : 'nbadge-pending'}`} style={{ marginRight: 6 }}>
+                            {user.available ? 'Available' : 'Unavailable'}
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        <button type="button" onClick={() => handleEdit(user)}>Edit</button>
+                        <button type="button" className="danger" onClick={() => handleDelete(user.id)}>Delete</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -201,14 +219,6 @@ export default function AdminDashboardPage() {
                           <option key={staff.id} value={staff.id}>{staff.name}</option>
                         ))}
                       </select>
-                      <input
-                        placeholder="Remarks"
-                        value={draft.adminRemarks || ''}
-                        onChange={(e) => setAssignmentDrafts((prev) => ({
-                          ...prev,
-                          [complaint.id]: { ...draft, adminRemarks: e.target.value },
-                        }))}
-                      />
                       <button type="button" onClick={() => handleAssign(complaint.id)} disabled={!draft.staffId}>Assign</button>
                     </td>
                   </tr>
@@ -234,7 +244,11 @@ export default function AdminDashboardPage() {
         <div className="chart-box">
           <ResponsiveContainer width="100%" height={240}>
             <PieChart>
-              <Pie data={pieData} dataKey="value" nameKey="name" outerRadius={85} label />
+              <Pie data={pieData} dataKey="value" nameKey="name" outerRadius={85} label>
+                {pieData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                ))}
+              </Pie>
               <Tooltip />
             </PieChart>
           </ResponsiveContainer>

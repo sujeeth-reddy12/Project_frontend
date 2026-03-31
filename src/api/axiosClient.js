@@ -3,7 +3,7 @@ import axios from 'axios';
 const AUTH_STORAGE_KEY = 'cms-auth';
 
 const axiosClient = axios.create({
-  baseURL: 'https://project-backend-2-5p9n.onrender.com/api',
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8081/api',
 });
 
 axiosClient.interceptors.request.use((config) => {
